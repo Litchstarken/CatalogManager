@@ -8,8 +8,13 @@ export const resolvers = {
   Query: {
     // Devuelve todos los productos de la base de datos
     products: async () => {
-      const database = await db;
-      return database.all("SELECT * FROM products");
+      try {
+        const database = await db;
+        return database.all("SELECT * FROM products");
+      } catch (error) {
+        console.error("Error fetching products:", error);
+        throw new Error("Error fetching products");
+      }
     },
 
     // Devuelve un producto por su ID
@@ -78,48 +83,58 @@ export const resolvers = {
       },
       context: Context
     ) => {
-      if (!context.user) {
-        throw new Error("No autorizado");
+      try {
+        if (!context.user) {
+          throw new Error("No autorizado");
+        }
+        const database = await db;
+
+        // Obtenemos el producto actual
+        const existing = await database.get(
+          "SELECT * FROM products WHERE id = ?",
+          args.id
+        );
+        if (!existing) return null;
+
+        // Aplicamos los cambios si se proporcionan
+        const updated = {
+          ...existing,
+          ...args,
+        };
+
+        // Ejecutamos la actualización
+        await database.run(
+          "UPDATE products SET name = ?, description = ?, price = ?, image = ? WHERE id = ?",
+          updated.name,
+          updated.description,
+          updated.price,
+          updated.image,
+          args.id
+        );
+
+        return updated;
+      } catch (error) {
+        console.error("Error updating product:", error);
+        throw new Error("Error updating product");
       }
-      const database = await db;
-
-      // Obtenemos el producto actual
-      const existing = await database.get(
-        "SELECT * FROM products WHERE id = ?",
-        args.id
-      );
-      if (!existing) return null;
-
-      // Aplicamos los cambios si se proporcionan
-      const updated = {
-        ...existing,
-        ...args,
-      };
-
-      // Ejecutamos la actualización
-      await database.run(
-        "UPDATE products SET name = ?, description = ?, price = ?, image = ? WHERE id = ?",
-        updated.name,
-        updated.description,
-        updated.price,
-        updated.image,
-        args.id
-      );
-
-      return updated;
     },
 
     // Elimina un producto por su ID
     deleteProduct: async (_: any, args: { id: string }, context: Context) => {
-      if (!context.user) {
-        throw new Error("No autorizado");
+      try {
+        if (!context.user) {
+          throw new Error("No autorizado");
+        }
+        const database = await db;
+        const result = await database.run(
+          "DELETE FROM products WHERE id = ?",
+          args.id
+        );
+        return result.changes && result.changes > 0;
+      } catch (error) {
+        console.error("Error deleting product:", error);
+        throw new Error("Error deleting product");
       }
-      const database = await db;
-      const result = await database.run(
-        "DELETE FROM products WHERE id = ?",
-        args.id
-      );
-      return result.changes && result.changes > 0;
     },
 
     login: async (_: any, args: { email: string; password: string }) => {
